@@ -186,7 +186,7 @@ docker-compose up --build
 ```
 Spins up MySQL + the Flask app together. First run only — create the table manually:
 ```bash
-docker exec -it mysql-db mysql -uflaskuser -pflaskpass flaskdb
+docker compose exec db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
 ```
 ```sql
 CREATE TABLE users (

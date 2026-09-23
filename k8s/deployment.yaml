@@ -30,13 +30,17 @@ spec:
               memory: 256Mi
           readinessProbe:
             httpGet:
-              path: /
+              path: /ready
               port: 5000
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 5000
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
