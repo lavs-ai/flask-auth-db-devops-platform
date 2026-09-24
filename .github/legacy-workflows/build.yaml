@@ -1,0 +1,96 @@
+name: Build and Deploy Flask App to EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "templates/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "run.py"
+      - ".github/workflows/build.yaml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+  
+    
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history — improves accuracy of Sonar's analysis
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
+  build-and-Update-k8s-manifest:
+    needs: sonarqube
+    name: Build Docker image and Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set short commit SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+           ${{ secrets.DOCKER_USERNAME }}/flask-auth-db-app-version-2:${{ steps.vars.outputs.sha_short }}
+           ${{ secrets.DOCKER_USERNAME }}/flask-auth-db-app-version-2:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      - name: Trivy Docker Image Scan for Vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ secrets.DOCKER_USERNAME }}/flask-auth-db-app-version-2:${{ steps.vars.outputs.sha_short }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+     
+      - name: Update image tag in k8s manifest
+        run: |
+          sed -i "s|image: .*flask-auth-db-app-version-2:.*|image: ${{ secrets.DOCKER_USERNAME }}/flask-auth-db-app-version-2:${{ steps.vars.outputs.sha_short }}|" k8s/deployment.yaml
+ 
+      - name: Commit and push updated manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/deployment.yaml
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "ci: deploy image ${{ steps.vars.outputs.sha_short }} [skip ci]"
+          git push     
