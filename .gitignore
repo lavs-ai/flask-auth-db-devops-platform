@@ -8,3 +8,9 @@ terraform.tfvars
 secrets.yaml
 sealed-secrets-key-backup.yaml
 alertmanager-values.yaml
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

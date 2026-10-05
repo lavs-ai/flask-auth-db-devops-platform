@@ -1,6 +1,12 @@
-from flask import render_template, request, redirect, session
+from flask import redirect, render_template, request, session
+
 from app import app
 from app.models import insert_user, validate_user
+
+
+@app.route('/health')
+def health():
+    return {"status": "healthy"}
 
 @app.route('/')
 def index():
